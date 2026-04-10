@@ -6,7 +6,7 @@ describe('IDGenerator', () => {
   // sequential モード (要件 13.1)
   // =========================================================================
   describe('sequential mode', () => {
-    it('should generate IDs in type-N format', () => {
+    it('should generate IDs in type-N format with per-type counters', () => {
       const gen = new IDGenerator()
       gen.setMode('sequential')
 
@@ -14,20 +14,27 @@ describe('IDGenerator', () => {
       const treeId = gen.generate('tree', '')
       const commitId = gen.generate('commit', '')
 
+      // 種別ごとに独立した連番
       expect(blobId).toBe('blob-1')
-      expect(treeId).toBe('tree-2')
-      expect(commitId).toBe('commit-3')
+      expect(treeId).toBe('tree-1')
+      expect(commitId).toBe('commit-1')
     })
 
-    it('should increment counter across calls', () => {
+    it('should increment counter independently per type', () => {
       const gen = new IDGenerator()
       gen.setMode('sequential')
 
-      const id1 = gen.generate('blob', '')
-      const id2 = gen.generate('blob', '')
+      const blob1 = gen.generate('blob', '')
+      const commit1 = gen.generate('commit', '')
+      const blob2 = gen.generate('blob', '')
+      const tree1 = gen.generate('tree', '')
+      const commit2 = gen.generate('commit', '')
 
-      expect(id1).toBe('blob-1')
-      expect(id2).toBe('blob-2')
+      expect(blob1).toBe('blob-1')
+      expect(commit1).toBe('commit-1')
+      expect(blob2).toBe('blob-2')
+      expect(tree1).toBe('tree-1')
+      expect(commit2).toBe('commit-2')
     })
   })
 
