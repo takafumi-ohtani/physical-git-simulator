@@ -33,7 +33,15 @@ export function createInitialState(): SimulatorState {
  * ObjectStore / RefStore はミュータブルクラスなので同一インスタンスを再利用する。
  */
 function cloneState(state: SimulatorState): SimulatorState {
-  return { ...state, errorMessage: null, notification: null };
+  const objectStore = state.objectStore.clone();
+  const refStore = state.refStore.clone(objectStore);
+  return {
+    ...state,
+    objectStore,
+    refStore,
+    errorMessage: null,
+    notification: null,
+  };
 }
 
 /**

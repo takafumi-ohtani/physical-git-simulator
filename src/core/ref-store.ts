@@ -19,6 +19,14 @@ export class RefStore {
     this.head = { type: "branch", name: "main" };
   }
 
+  /** 現在の状態をクローンする（新しいObjectStoreインスタンスを紐付ける） */
+  clone(newObjectStore: ObjectStore): RefStore {
+    const copy = new RefStore(newObjectStore);
+    copy.branches = new Map(this.branches);
+    copy.head = { ...this.head };
+    return copy;
+  }
+
   // ---------------------------------------------------------------------------
   // Branch操作
   // ---------------------------------------------------------------------------

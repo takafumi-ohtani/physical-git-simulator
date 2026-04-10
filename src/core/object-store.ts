@@ -22,6 +22,16 @@ export class ObjectStore {
     this.idGenerator = idGenerator;
   }
 
+  /** 現在の状態をクローンする（IDGeneratorもクローンされる） */
+  clone(): ObjectStore {
+    const clonedIdGen = this.idGenerator.clone();
+    const copy = new ObjectStore(clonedIdGen);
+    for (const [id, obj] of this.objects) {
+      copy.objects.set(id, obj); // オブジェクト自体はfreezeされているのでそのまま共有
+    }
+    return copy;
+  }
+
   /**
    * IDGeneratorインスタンスを取得する
    */

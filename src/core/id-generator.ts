@@ -16,9 +16,22 @@ export class IDGenerator {
     return this.mode;
   }
 
+  /** カウンターの現在値を取得 */
+  getCounter(): number {
+    return this.counter;
+  }
+
   /** モードを切り替える */
   setMode(mode: IdMode): void {
     this.mode = mode;
+  }
+
+  /** 現在の状態をクローンする */
+  clone(): IDGenerator {
+    const copy = new IDGenerator();
+    copy.mode = this.mode;
+    copy.counter = this.counter;
+    return copy;
   }
 
   /**
