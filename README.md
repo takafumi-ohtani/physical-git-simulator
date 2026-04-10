@@ -1,73 +1,79 @@
-# React + TypeScript + Vite
+# Physical Git Simulator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Gitの内部構造（Blob / Tree / Commit / Branch / HEAD / Merge / Conflict）を視覚的に再現する教育・検証用Webアプリケーション。
 
-Currently, two official plugins are available:
+一般的なGitクライアントやCLI学習ツールではなく、Gitを「再発明させる」体験を提供することを目的としている。物理Gitゲームのルール事前検証にも利用可能。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## スクリーンショット
 
-## React Compiler
+![Physical Git Simulator](docs/images/screenshot.png)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 特徴
 
-## Expanding the ESLint configuration
+- **Gitオブジェクトの可視化** — Blob・Tree・Commitの作成過程をステップごとに表示
+- **DAGグラフ描画** — Commit履歴を有向非巡回グラフとしてSVGで描画。分岐・合流を視覚的に表現
+- **Branch・HEAD操作** — Branch作成・移動・Checkout・Detached HEADを体験
+- **Merge・Conflict解決** — Fast-Forward / 通常Merge / Conflictの3パターンを再現。Ancestor・Ours・Theirsの3-way比較
+- **不変性の体験** — Object.freezeによるオブジェクトの不変性を実際に確認可能
+- **ID方式切替** — 連番 / 疑似ハッシュ / 内容依存ハッシュの3モードを切り替えて学習段階に対応
+- **ブラウザ完結** — サーバー不要。localStorageで状態を永続化
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## オブジェクト種別と視覚表現
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| 種別 | 色 | 区分 |
+|------|-----|------|
+| Blob | 青 (#3B82F6) | 不変オブジェクト |
+| Tree | 緑 (#10B981) | 不変オブジェクト |
+| Commit | 黄 (#F59E0B) | 不変オブジェクト |
+| Branch | 紫 (#8B5CF6) | 可変参照 |
+| HEAD | 赤 (#EF4444) | 可変参照 |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 技術スタック
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- React 19 + TypeScript（Vite）
+- 状態管理: useReducer + Context
+- DAGグラフ: SVGカスタム描画（外部ライブラリ不使用）
+- 差分表示: 行単位diffカスタム実装
+- テスト: Vitest + fast-check（プロパティベーステスト）
+- 永続化: localStorage
+
+## セットアップ
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## スクリプト
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| コマンド | 説明 |
+|----------|------|
+| `npm run dev` | 開発サーバー起動 |
+| `npm run build` | プロダクションビルド |
+| `npm run preview` | ビルド結果のプレビュー |
+| `npm run test` | テスト実行 |
+| `npm run test:watch` | テストのウォッチモード |
+| `npm run lint` | ESLint実行 |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## アーキテクチャ
+
 ```
+Core Engine（純粋ロジック）
+├── ObjectStore — Blob・Tree・Commitの不変オブジェクト管理
+├── RefStore — Branch・HEADの可変参照管理
+├── IDGenerator — 3モードのID生成
+└── MergeEngine — FF判定・Conflict検出・Ancestor探索
+
+State Management（React Context + useReducer）
+└── SimulatorReducer — ユーザー操作をCore Engineのアクションに変換
+
+UI（React コンポーネント）
+├── CommandPanel — 操作パネル（左）
+├── DAGGraphView — Commit履歴のDAGグラフ（中央）
+├── DetailPanel — オブジェクト詳細・Ref一覧・Step History（右）
+└── ConflictResolver — Conflict解決UI
+```
+
+## ライセンス
+
+MIT
