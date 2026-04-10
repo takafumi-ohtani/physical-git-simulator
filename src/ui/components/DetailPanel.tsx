@@ -375,15 +375,16 @@ function StepHistory({ steps }: { steps: StepRecord[] }) {
   }
 
   return (
-    <div style={sectionStyle}>
+    <div style={{ ...sectionStyle, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div style={sectionTitleStyle}>Step History</div>
       <div
         style={{
-          maxHeight: 240,
+          flex: 1,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 4,
+          minHeight: 0,
         }}
       >
         {[...steps].reverse().map((step, i) => {
@@ -447,26 +448,30 @@ export function DetailPanel() {
         background: COLORS.bg,
         borderLeft: `1px solid ${COLORS.border}`,
         height: "100%",
-        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
       }}
     >
       {/* Object Detail (shown when an object is selected) */}
-      {state.selectedObjectId ? (
-        <ObjectDetail
-          objectId={state.selectedObjectId}
-          objectStore={state.objectStore}
-          onNavigate={handleNavigate}
-        />
-      ) : (
-        <div style={{ ...sectionStyle, color: COLORS.muted, fontSize: 12 }}>
-          Click an object or commit node to view details.
-        </div>
-      )}
+      <div style={{ overflowY: "auto", flexShrink: 0 }}>
+        {state.selectedObjectId ? (
+          <ObjectDetail
+            objectId={state.selectedObjectId}
+            objectStore={state.objectStore}
+            onNavigate={handleNavigate}
+          />
+        ) : (
+          <div style={{ ...sectionStyle, color: COLORS.muted, fontSize: 12 }}>
+            Click an object or commit node to view details.
+          </div>
+        )}
 
-      {/* Ref List */}
-      <RefList refStore={state.refStore} onNavigate={handleNavigate} />
+        {/* Ref List */}
+        <RefList refStore={state.refStore} onNavigate={handleNavigate} />
+      </div>
 
-      {/* Step History */}
+      {/* Step History - 残りの高さを使い切る */}
       <StepHistory steps={state.stepHistory} />
     </div>
   );
