@@ -1,0 +1,9 @@
+/* =============================================================================
+   App.css — Physical Git Simulator
+   Most styling is inline in components. This file provides minimal overrides.
+   ============================================================================= */
+
+/* Ensure SVG in the DAG view doesn't cause layout issues */
+svg {
+  display: block;
+}
