@@ -7,8 +7,8 @@ import type { RefStore } from "../core/ref-store";
 // =============================================================================
 
 /** Layout spacing constants */
-export const NODE_SPACING_X = 80;
-export const NODE_SPACING_Y = 60;
+export const NODE_SPACING_X = 100;
+export const NODE_SPACING_Y = 80;
 
 /** DAGグラフ上の1ノード（Commit） */
 export interface DAGNode {

@@ -17,7 +17,7 @@ const COLORS = {
   bg: "#FAFAFA",
 } as const;
 
-const NODE_RADIUS = 20;
+const NODE_RADIUS = 30;
 const PADDING = 60;
 const BRANCH_LABEL_OFFSET_X = 30;
 const HEAD_LABEL_OFFSET_Y = -16;
@@ -60,7 +60,12 @@ function CommitNode({
 }) {
   const cx = node.x + PADDING;
   const cy = node.y + PADDING;
-  const label = node.commitId.length > 7 ? node.commitId.slice(0, 7) : node.commitId;
+  const label = node.commitId.length > 10 ? node.commitId.slice(0, 10) : node.commitId;
+
+  // monospace の1文字幅はおよそ fontSize * 0.6。ノード内径に収まるフォントサイズを算出
+  const innerWidth = NODE_RADIUS * 2 * 0.75; // 直径の75%を使う
+  const charWidthRatio = 0.6;
+  const fontSize = Math.min(11, innerWidth / (label.length * charWidthRatio));
 
   return (
     <g
@@ -79,10 +84,10 @@ function CommitNode({
       />
       <text
         x={cx}
-        y={cy + 1}
+        y={cy}
         textAnchor="middle"
-        dominantBaseline="middle"
-        fontSize={10}
+        dominantBaseline="central"
+        fontSize={fontSize}
         fontFamily="monospace"
         fill={COLORS.text}
         pointerEvents="none"
