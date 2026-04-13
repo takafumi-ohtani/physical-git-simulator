@@ -19,7 +19,7 @@ Gitの内部構造を視覚的に再現するWebアプリケーションを、Re
 
 - [x] 2. IDGenerator の実装
   - [x] 2.1 `src/core/id-generator.ts` に IDGenerator を実装する
-    - `sequential` モード: `blob-1`, `tree-2`, `commit-3` 形式の連番生成
+    - `sequential` モード: `blob-1`, `blob-2`, `tree-1`, `commit-1` 形式の種別内連番生成
     - `pseudo-hash` モード: ランダム8文字hex生成
     - `content-hash` モード: `crypto.subtle` を使ったSHA-1先頭8文字生成
     - `setMode`, `getMode`, `remapId` メソッドを実装

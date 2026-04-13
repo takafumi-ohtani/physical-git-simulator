@@ -9,16 +9,16 @@ import type { IdMode, ObjectId } from "./types";
  */
 export class IDGenerator {
   private mode: IdMode = "sequential";
-  private counter = 0;
+  private counters: Record<string, number> = { blob: 0, tree: 0, commit: 0 };
 
   /** 現在のモードを取得 */
   getMode(): IdMode {
     return this.mode;
   }
 
-  /** カウンターの現在値を取得 */
-  getCounter(): number {
-    return this.counter;
+  /** 指定種別のカウンターの現在値を取得 */
+  getCounter(objectType: "blob" | "tree" | "commit" = "blob"): number {
+    return this.counters[objectType] ?? 0;
   }
 
   /** モードを切り替える */
@@ -30,7 +30,7 @@ export class IDGenerator {
   clone(): IDGenerator {
     const copy = new IDGenerator();
     copy.mode = this.mode;
-    copy.counter = this.counter;
+    copy.counters = { ...this.counters };
     return copy;
   }
 
@@ -64,10 +64,10 @@ export class IDGenerator {
     return this.generate(objectType, content);
   }
 
-  /** sequential: type-N 形式 */
+  /** sequential: type-N 形式（種別ごとに独立した連番） */
   private generateSequential(objectType: string): ObjectId {
-    this.counter++;
-    return `${objectType}-${this.counter}`;
+    this.counters[objectType] = (this.counters[objectType] ?? 0) + 1;
+    return `${objectType}-${this.counters[objectType]}`;
   }
 
   /** pseudo-hash: ランダム8文字hex */
