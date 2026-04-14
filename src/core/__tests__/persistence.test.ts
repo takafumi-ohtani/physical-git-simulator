@@ -115,7 +115,7 @@ describe("persistence", () => {
     });
 
     it("should accept all valid idMode values", () => {
-      for (const mode of ["sequential", "pseudo-hash", "content-hash"] as const) {
+      for (const mode of ["sequential", "pseudo-hash"] as const) {
         const state: PersistedState = { ...createValidState(), idMode: mode };
         localStorageMock.setItem("git-simulator-state", JSON.stringify(state));
         expect(loadState()).toEqual(state);

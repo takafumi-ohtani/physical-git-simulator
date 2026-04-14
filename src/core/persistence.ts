@@ -118,5 +118,5 @@ function isValidHeadRef(head: unknown): head is HeadRef {
 }
 
 function isValidIdMode(mode: unknown): mode is IdMode {
-  return mode === "sequential" || mode === "pseudo-hash" || mode === "content-hash";
+  return mode === "sequential" || mode === "pseudo-hash";
 }
