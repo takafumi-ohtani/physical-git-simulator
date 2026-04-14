@@ -29,7 +29,6 @@ const COLORS = {
 const ID_MODE_OPTIONS: { value: IdMode; label: string }[] = [
   { value: "sequential", label: "連番" },
   { value: "pseudo-hash", label: "疑似ハッシュ" },
-  { value: "content-hash", label: "内容ハッシュ" },
 ];
 
 // =============================================================================

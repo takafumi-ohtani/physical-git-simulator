@@ -1,116 +1,184 @@
 import { useState } from "react";
 import { useSimulator } from "../../state/context";
-import { computeDiff, type DiffLine } from "../../core/diff";
-import type { ConflictEntry, ResolveChoice } from "../../core/types";
+import type { ConflictEntry, ResolveChoice, BlobContent, BlobWord1, BlobWord2 } from "../../core/types";
+import { BLOB_WORD1, BLOB_WORD2 } from "../../core/types";
 
 // =============================================================================
-// ConflictResolver - Conflict解決UI（モーダル/オーバーレイ）
-// 要件: 8.1, 8.2, 8.3, 8.4, 8.5, 15.1, 15.2
+// ConflictResolver - Conflict解決UI（2ワード構造対応）
+// 要件: 8.1, 8.2, 8.3, 8.4, 8.5
 // =============================================================================
 
-/** 差分行の背景色を返す */
-function diffBgColor(type: DiffLine["type"]): string {
-  switch (type) {
-    case "added":
-      return "#dcfce7"; // green bg
-    case "deleted":
-      return "#fee2e2"; // red bg
-    default:
-      return "transparent";
-  }
-}
-
 // ---------------------------------------------------------------------------
-// DiffHighlight - 差分行の色分け強調表示
+// BlobWordDisplay - 1ワードを色付きスパンで表示
 // ---------------------------------------------------------------------------
 
-function DiffHighlight({ oldText, newText }: { oldText: string; newText: string }) {
-  const lines = computeDiff(oldText, newText);
+function BlobWordDisplay({
+  word,
+  changed,
+}: {
+  word: string;
+  changed: boolean;
+}) {
   return (
-    <div style={{ fontFamily: "monospace", fontSize: 12, lineHeight: "1.6" }}>
-      {lines.map((line, i) => (
-        <div
-          key={i}
-          style={{
-            backgroundColor: diffBgColor(line.type),
-            padding: "0 4px",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-          }}
-        >
-          {line.type === "added" ? "+ " : line.type === "deleted" ? "- " : "  "}
-          {line.content}
-        </div>
-      ))}
-    </div>
+    <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+      <span
+        style={{
+          padding: "3px 8px",
+          borderRadius: 4,
+          background: changed ? "#FEE2E2" : "#F3F4F6",
+          color: changed ? "#DC2626" : "#374151",
+          fontWeight: changed ? 700 : 400,
+          fontFamily: "monospace",
+          fontSize: 14,
+          border: changed ? "1px solid #FCA5A5" : "1px solid #E5E7EB",
+        }}
+      >
+        {word}
+      </span>
+      {changed && (
+        <span style={{ fontSize: 9, color: "#DC2626", fontWeight: 600 }}>↑変更</span>
+      )}
+    </span>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ThreeWayView - Ancestor / Ours / Theirs 3カラム並列表示
+// BlobContentDisplay - "形状-数字" を2ワード分解して表示
 // ---------------------------------------------------------------------------
 
-function ThreeWayView({ conflict }: { conflict: ConflictEntry }) {
-  const ancestorText = conflict.ancestor ?? "";
+function BlobContentDisplay({
+  content,
+  ancestor,
+  label,
+  labelColor,
+  borderColor,
+  bgColor,
+}: {
+  content: string;
+  ancestor: string;
+  label: string;
+  labelColor: string;
+  borderColor: string;
+  bgColor: string;
+}) {
+  const [w1, w2] = content.split("-");
+  const [aw1, aw2] = ancestor.split("-");
+  const word1Changed = w1 !== aw1;
+  const word2Changed = w2 !== aw2;
+
   return (
-    <div style={{ display: "flex", gap: 8 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h4 style={{ margin: "0 0 4px", fontSize: 13 }}>Ancestor</h4>
-        <div
-          style={{
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            padding: 6,
-            maxHeight: 200,
-            overflow: "auto",
-            background: "#fafafa",
-          }}
-        >
-          <DiffHighlight oldText="" newText={ancestorText} />
-        </div>
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: labelColor, marginBottom: 6 }}>
+        {label}
       </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h4 style={{ margin: "0 0 4px", fontSize: 13, color: "#2563eb" }}>
-          Ours (HEAD)
-        </h4>
-        <div
-          style={{
-            border: "1px solid #93c5fd",
-            borderRadius: 4,
-            padding: 6,
-            maxHeight: 200,
-            overflow: "auto",
-            background: "#eff6ff",
-          }}
-        >
-          <DiffHighlight oldText={ancestorText} newText={conflict.ours} />
-        </div>
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h4 style={{ margin: "0 0 4px", fontSize: 13, color: "#d97706" }}>
-          Theirs (Source)
-        </h4>
-        <div
-          style={{
-            border: "1px solid #fcd34d",
-            borderRadius: 4,
-            padding: 6,
-            maxHeight: 200,
-            overflow: "auto",
-            background: "#fffbeb",
-          }}
-        >
-          <DiffHighlight oldText={ancestorText} newText={conflict.theirs} />
-        </div>
+      <div
+        style={{
+          border: `1px solid ${borderColor}`,
+          borderRadius: 6,
+          padding: "10px 8px",
+          background: bgColor,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          minHeight: 56,
+        }}
+      >
+        <BlobWordDisplay word={w1 ?? "?"} changed={word1Changed} />
+        <span style={{ color: "#9CA3AF", fontSize: 16 }}>-</span>
+        <BlobWordDisplay word={w2 ?? "?"} changed={word2Changed} />
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ResolveActions - Ours / Theirs / Manual 解決ボタン
+// ContentMatrixPicker - 別のBlobを選ぶ用のContent_Matrix
+// ---------------------------------------------------------------------------
+
+function ContentMatrixPicker({
+  onSelect,
+  onCancel,
+}: {
+  onSelect: (content: BlobContent) => void;
+  onCancel: () => void;
+}) {
+  const { state, dispatch } = useSimulator();
+  const [hoveredContent, setHoveredContent] = useState<BlobContent | null>(null);
+
+  const handleCellClick = (w1: BlobWord1, w2: BlobWord2) => {
+    const content: BlobContent = `${w1}-${w2}`;
+    const existing = state.objectStore.findBlobByContent(content);
+    if (!existing) {
+      // 未登録なら先に作成
+      dispatch({ type: "CREATE_BLOB", content });
+    }
+    onSelect(content);
+  };
+
+  return (
+    <div style={{ marginTop: 8, padding: 10, background: "#F9FAFB", borderRadius: 6, border: "1px solid #E5E7EB" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "#374151" }}>
+        解決に使うBlobを選んでください
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 11 }}>
+        <thead>
+          <tr>
+            <th style={{ padding: "2px 6px", color: "#6B7280", fontWeight: 400 }}></th>
+            {BLOB_WORD2.map((w2) => (
+              <th key={w2} style={{ padding: "2px 6px", color: "#6B7280", fontWeight: 600, textAlign: "center" }}>{w2}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {BLOB_WORD1.map((w1) => (
+            <tr key={w1}>
+              <td style={{ padding: "2px 6px", color: "#6B7280", fontWeight: 600, whiteSpace: "nowrap" }}>{w1}</td>
+              {BLOB_WORD2.map((w2) => {
+                const content: BlobContent = `${w1}-${w2}`;
+                const blob = state.objectStore.findBlobByContent(content);
+                const isHovered = hoveredContent === content;
+                return (
+                  <td
+                    key={w2}
+                    onClick={() => handleCellClick(w1, w2)}
+                    onMouseEnter={() => setHoveredContent(content)}
+                    onMouseLeave={() => setHoveredContent(null)}
+                    style={{
+                      padding: "4px 2px",
+                      border: "1px solid #E5E7EB",
+                      background: isHovered ? "#DBEAFE" : blob ? "#EFF6FF" : "#fff",
+                      textAlign: "center",
+                      minWidth: 40,
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                      fontSize: 10,
+                      color: blob ? "#2563EB" : "#9CA3AF",
+                      fontWeight: blob ? 600 : 400,
+                      transition: "background 0.1s",
+                    }}
+                    title={blob ? `ID: ${blob.id}` : `${content}（新規作成）`}
+                  >
+                    {blob ? blob.id : content}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button
+        onClick={onCancel}
+        style={{ marginTop: 8, fontSize: 11, padding: "3px 10px", border: "1px solid #E5E7EB", borderRadius: 4, cursor: "pointer", background: "#fff" }}
+      >
+        キャンセル
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ResolveActions - Ours / Theirs / 別のBlobを選ぶ 3択ボタン
 // ---------------------------------------------------------------------------
 
 function ResolveActions({
@@ -120,8 +188,7 @@ function ResolveActions({
   onResolve: (choice: ResolveChoice) => void;
   resolved: boolean;
 }) {
-  const [manualMode, setManualMode] = useState(false);
-  const [manualText, setManualText] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
 
   if (resolved) {
     return (
@@ -133,95 +200,41 @@ function ResolveActions({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button
           onClick={() => onResolve("ours")}
-          style={{
-            padding: "4px 12px",
-            background: "#2563eb",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
+          style={{ padding: "5px 14px", background: "#2563EB", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 }}
         >
-          Ours 採用
+          Ours を採用
         </button>
         <button
           onClick={() => onResolve("theirs")}
-          style={{
-            padding: "4px 12px",
-            background: "#d97706",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
+          style={{ padding: "5px 14px", background: "#D97706", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 }}
         >
-          Theirs 採用
+          Theirs を採用
         </button>
         <button
-          onClick={() => setManualMode((v) => !v)}
-          style={{
-            padding: "4px 12px",
-            background: manualMode ? "#6b7280" : "#4b5563",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
+          onClick={() => setShowPicker((v) => !v)}
+          style={{ padding: "5px 14px", background: showPicker ? "#6B7280" : "#4B5563", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 }}
         >
-          手動解決
+          別のBlobを選ぶ
         </button>
       </div>
-
-      {manualMode && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <textarea
-            value={manualText}
-            onChange={(e) => setManualText(e.target.value)}
-            placeholder="解決後の内容を入力..."
-            rows={5}
-            style={{
-              fontFamily: "monospace",
-              fontSize: 12,
-              padding: 6,
-              border: "1px solid #ccc",
-              borderRadius: 4,
-              resize: "vertical",
-            }}
-          />
-          <button
-            onClick={() => {
-              if (manualText.trim()) {
-                onResolve({ manual: manualText });
-              }
-            }}
-            disabled={!manualText.trim()}
-            style={{
-              alignSelf: "flex-start",
-              padding: "4px 12px",
-              background: manualText.trim() ? "#16a34a" : "#d1d5db",
-              color: "#fff",
-              border: "none",
-              borderRadius: 4,
-              cursor: manualText.trim() ? "pointer" : "not-allowed",
-              fontSize: 12,
-            }}
-          >
-            手動解決を適用
-          </button>
-        </div>
+      {showPicker && (
+        <ContentMatrixPicker
+          onSelect={(content) => {
+            onResolve({ manual: content });
+            setShowPicker(false);
+          }}
+          onCancel={() => setShowPicker(false)}
+        />
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ConflictItem - 個別Conflictの表示
+// ConflictItem - 個別Conflictの表示（ワード単位色分け）
 // ---------------------------------------------------------------------------
 
 function ConflictItem({
@@ -233,41 +246,63 @@ function ConflictItem({
   isResolved: boolean;
   onResolve: (choice: ResolveChoice) => void;
 }) {
+  const ancestorText = conflict.ancestor ?? "";
+
   return (
     <div
       style={{
-        border: "1px solid #e5e7eb",
+        border: "1px solid #E5E7EB",
         borderRadius: 6,
         padding: 12,
         marginBottom: 12,
-        background: isResolved ? "#f0fdf4" : "#fff",
+        background: isResolved ? "#F0FDF4" : "#fff",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 8,
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <strong style={{ fontSize: 14 }}>{conflict.path}</strong>
-        <ResolveActions onResolve={onResolve} resolved={isResolved} />
       </div>
-      <ThreeWayView conflict={conflict} />
+
+      {/* 3列並置 */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <BlobContentDisplay
+          content={ancestorText || "（なし）"}
+          ancestor={ancestorText}
+          label="Ancestor（共通祖先）"
+          labelColor="#6B7280"
+          borderColor="#E5E7EB"
+          bgColor="#F9FAFB"
+        />
+        <BlobContentDisplay
+          content={conflict.ours}
+          ancestor={ancestorText}
+          label="Ours（HEAD側）"
+          labelColor="#2563EB"
+          borderColor="#93C5FD"
+          bgColor="#EFF6FF"
+        />
+        <BlobContentDisplay
+          content={conflict.theirs}
+          ancestor={ancestorText}
+          label="Theirs（相手Branch側）"
+          labelColor="#D97706"
+          borderColor="#FCD34D"
+          bgColor="#FFFBEB"
+        />
+      </div>
+
+      <ResolveActions onResolve={onResolve} resolved={isResolved} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ConflictResolver - メインコンポーネント（モーダル/オーバーレイ）
+// ConflictResolver - メインコンポーネント
 // ---------------------------------------------------------------------------
 
 export function ConflictResolver() {
   const { state, dispatch } = useSimulator();
   const [mergeMessage, setMergeMessage] = useState("");
 
-  // mergeState が null または conflicts が空なら表示しない
   if (!state.mergeState || state.mergeState.conflicts.length === 0) {
     return null;
   }
@@ -280,9 +315,7 @@ export function ConflictResolver() {
   };
 
   const handleCompleteMerge = () => {
-    const msg =
-      mergeMessage.trim() ||
-      `Merge branch '${sourceBranch}' into ${targetBranch}`;
+    const msg = mergeMessage.trim() || `Merge branch '${sourceBranch}' into ${targetBranch}`;
     dispatch({ type: "COMPLETE_MERGE", message: msg });
   };
 
@@ -304,14 +337,14 @@ export function ConflictResolver() {
           borderRadius: 8,
           padding: 20,
           width: "90vw",
-          maxWidth: 960,
+          maxWidth: 900,
           maxHeight: "85vh",
           overflow: "auto",
           boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
         }}
       >
         <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>Conflict 解決</h2>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6B7280" }}>
           {sourceBranch} → {targetBranch} ・ {conflicts.length} 件の Conflict
           （{resolved.size} / {conflicts.length} 解決済み）
         </p>
@@ -330,9 +363,9 @@ export function ConflictResolver() {
             style={{
               marginTop: 16,
               padding: 12,
-              border: "1px solid #86efac",
+              border: "1px solid #86EFAC",
               borderRadius: 6,
-              background: "#f0fdf4",
+              background: "#F0FDF4",
               display: "flex",
               gap: 8,
               alignItems: "center",
@@ -343,19 +376,13 @@ export function ConflictResolver() {
               value={mergeMessage}
               onChange={(e) => setMergeMessage(e.target.value)}
               placeholder={`Merge branch '${sourceBranch}' into ${targetBranch}`}
-              style={{
-                flex: 1,
-                padding: "6px 8px",
-                border: "1px solid #ccc",
-                borderRadius: 4,
-                fontSize: 13,
-              }}
+              style={{ flex: 1, padding: "6px 8px", border: "1px solid #ccc", borderRadius: 4, fontSize: 13 }}
             />
             <button
               onClick={handleCompleteMerge}
               style={{
                 padding: "6px 16px",
-                background: "#16a34a",
+                background: "#16A34A",
                 color: "#fff",
                 border: "none",
                 borderRadius: 4,

@@ -8,6 +8,7 @@ import type {
   ConflictResult,
   ConflictEntry,
   ResolveChoice,
+  BlobContent,
 } from "./types";
 import type { ObjectStore } from "./object-store";
 import type { RefStore } from "./ref-store";
@@ -15,13 +16,30 @@ import type { RefStore } from "./ref-store";
 type MergeResultUnion = FastForwardResult | NormalMergeResult | ConflictResult;
 
 /**
- * MergeEngine - Fast-Forward / Normal Merge / Conflict の3パターンを処理
+ * 2ワード構造のBlobコンテンツに対してマージ分類を行う（純粋関数）
  *
- * ObjectStore と RefStore を利用して、2つのBranchのマージを実行する。
- * - 共通祖先（Ancestor）の探索（BFS）
- * - Fast-Forward判定
- * - Tree差分比較によるConflict検出
- * - Conflict解決（ours / theirs / manual）
+ * - no-change:   両者ともAncestorから変更なし
+ * - auto-ours:   Oursのみ変更 → 自動採用
+ * - auto-theirs: Theirsのみ変更 → 自動採用
+ * - conflict:    両方変更 → ユーザーが手動解決
+ */
+export function classifyBlobMerge(
+  ancestor: BlobContent,
+  ours: BlobContent,
+  theirs: BlobContent
+): "no-change" | "auto-ours" | "auto-theirs" | "conflict" {
+  const oursChanged = ours !== ancestor;
+  const theirsChanged = theirs !== ancestor;
+
+  if (!oursChanged && !theirsChanged) return "no-change";
+  if (oursChanged && !theirsChanged) return "auto-ours";
+  if (!oursChanged && theirsChanged) return "auto-theirs";
+  // 両方変更 → 常にConflict（ワード単位の自動合成は行わない）
+  return "conflict";
+}
+
+/**
+ * MergeEngine - Fast-Forward / Normal Merge / Conflict の3パターンを処理
  */
 export class MergeEngine {
   private objectStore: ObjectStore;
@@ -36,7 +54,6 @@ export class MergeEngine {
    * 2つのCommitの共通祖先をBFSで探索する
    */
   findAncestor(commitA: ObjectId, commitB: ObjectId): ObjectId | null {
-    // Collect all ancestors of commitA (including commitA itself)
     const ancestorsA = new Set<ObjectId>();
     const queueA: ObjectId[] = [commitA];
     while (queueA.length > 0) {
@@ -45,27 +62,20 @@ export class MergeEngine {
       ancestorsA.add(id);
       const obj = this.objectStore.get(id);
       if (obj && obj.type === "commit") {
-        for (const parentId of obj.parentIds) {
-          queueA.push(parentId);
-        }
+        for (const parentId of obj.parentIds) queueA.push(parentId);
       }
     }
 
-    // BFS from commitB, find the first commit that is also an ancestor of A
     const visited = new Set<ObjectId>();
     const queueB: ObjectId[] = [commitB];
     while (queueB.length > 0) {
       const id = queueB.shift()!;
       if (visited.has(id)) continue;
       visited.add(id);
-      if (ancestorsA.has(id)) {
-        return id;
-      }
+      if (ancestorsA.has(id)) return id;
       const obj = this.objectStore.get(id);
       if (obj && obj.type === "commit") {
-        for (const parentId of obj.parentIds) {
-          queueB.push(parentId);
-        }
+        for (const parentId of obj.parentIds) queueB.push(parentId);
       }
     }
 
@@ -74,8 +84,6 @@ export class MergeEngine {
 
   /**
    * Fast-Forward判定: targetがsourceの祖先であるかチェック
-   *
-   * targetがsourceの祖先 → sourceまでBranch参照を進めるだけでマージ完了
    */
   isFastForward(source: ObjectId, target: ObjectId): boolean {
     if (source === target) return true;
@@ -88,9 +96,7 @@ export class MergeEngine {
       if (id === target) return true;
       const obj = this.objectStore.get(id);
       if (obj && obj.type === "commit") {
-        for (const parentId of obj.parentIds) {
-          queue.push(parentId);
-        }
+        for (const parentId of obj.parentIds) queue.push(parentId);
       }
     }
     return false;
@@ -98,55 +104,38 @@ export class MergeEngine {
 
   /**
    * 2つのBranchをマージする
-   *
-   * sourceBranch を targetBranch にマージする。
-   * - Fast-Forward: targetがsourceの祖先 → Branch参照を移動
-   * - Normal Merge: Conflictなし → 新しいMerge Commitを作成
-   * - Conflict: 同一ファイルが両方で異なる変更 → ConflictResultを返す
    */
   merge(sourceBranch: string, targetBranch: string): MergeResultUnion {
     const sourceCommitId = this.refStore.getBranch(sourceBranch);
     const targetCommitId = this.refStore.getBranch(targetBranch);
 
-    if (!sourceCommitId) {
-      throw new Error(`Branch "${sourceBranch}" は存在しません`);
-    }
-    if (!targetCommitId) {
-      throw new Error(`Branch "${targetBranch}" は存在しません`);
-    }
+    if (!sourceCommitId) throw new Error(`Branch "${sourceBranch}" は存在しません`);
+    if (!targetCommitId) throw new Error(`Branch "${targetBranch}" は存在しません`);
 
-    // Same commit — nothing to do, treat as fast-forward
     if (sourceCommitId === targetCommitId) {
       return { type: "fast-forward", targetCommitId: sourceCommitId };
     }
 
-    // Fast-Forward check: is target an ancestor of source?
     if (this.isFastForward(sourceCommitId, targetCommitId)) {
-      // Move target branch pointer to source commit
       this.refStore.moveBranch(targetBranch, sourceCommitId);
       return { type: "fast-forward", targetCommitId: sourceCommitId };
     }
 
-    // Find common ancestor
     const ancestorId = this.findAncestor(sourceCommitId, targetCommitId);
 
-    // Get trees for comparison
     const sourceTree = this.getCommitTree(sourceCommitId);
     const targetTree = this.getCommitTree(targetCommitId);
     const ancestorTree = ancestorId ? this.getCommitTree(ancestorId) : null;
 
-    // Build file maps from trees
     const sourceFiles = this.flattenTree(sourceTree);
     const targetFiles = this.flattenTree(targetTree);
     const ancestorFiles = ancestorTree
       ? this.flattenTree(ancestorTree)
       : new Map<string, string>();
 
-    // Detect conflicts and auto-merge
     const conflicts: ConflictEntry[] = [];
     const mergedFiles = new Map<string, string>();
 
-    // Collect all file paths
     const allPaths = new Set<string>([
       ...sourceFiles.keys(),
       ...targetFiles.keys(),
@@ -158,33 +147,21 @@ export class MergeEngine {
       const sourceContent = sourceFiles.get(path) ?? null;
       const targetContent = targetFiles.get(path) ?? null;
 
-      // Both sides have the same content — no conflict
       if (sourceContent === targetContent) {
-        if (sourceContent !== null) {
-          mergedFiles.set(path, sourceContent);
-        }
+        if (sourceContent !== null) mergedFiles.set(path, sourceContent);
         continue;
       }
 
-      // Only source changed from ancestor (or file added only in source)
       if (targetContent === ancestorContent) {
-        if (sourceContent !== null) {
-          mergedFiles.set(path, sourceContent);
-        }
-        // else: source deleted the file — omit from merged
+        if (sourceContent !== null) mergedFiles.set(path, sourceContent);
         continue;
       }
 
-      // Only target changed from ancestor (or file added only in target)
       if (sourceContent === ancestorContent) {
-        if (targetContent !== null) {
-          mergedFiles.set(path, targetContent);
-        }
-        // else: target deleted the file — omit from merged
+        if (targetContent !== null) mergedFiles.set(path, targetContent);
         continue;
       }
 
-      // Both changed differently from ancestor → conflict
       conflicts.push({
         path,
         ancestor: ancestorContent,
@@ -197,15 +174,11 @@ export class MergeEngine {
       return { type: "conflict", conflicts };
     }
 
-    // No conflicts — create merge commit
-    // Build tree entries from merged files
     const treeEntries: TreeEntry[] = [];
     for (const [name, content] of mergedFiles) {
       const { blob } = this.objectStore.addBlob(content);
       treeEntries.push({ name, objectId: blob.id });
     }
-
-    // Sort entries by name for consistency
     treeEntries.sort((a, b) => a.name.localeCompare(b.name));
 
     const mergeTree = this.objectStore.addTree(treeEntries);
@@ -215,25 +188,16 @@ export class MergeEngine {
       `Merge ${sourceBranch} into ${targetBranch}`
     );
 
-    // Advance target branch to merge commit
     this.refStore.moveBranch(targetBranch, mergeCommit.id);
-
     return { type: "normal", mergeCommit };
   }
 
   /**
    * Conflict解決: ours / theirs / manual の3方式
-   *
-   * 解決結果の文字列を返す。
    */
   resolveConflict(entry: ConflictEntry, choice: ResolveChoice): string {
-    if (choice === "ours") {
-      return entry.ours;
-    }
-    if (choice === "theirs") {
-      return entry.theirs;
-    }
-    // manual resolution
+    if (choice === "ours") return entry.ours;
+    if (choice === "theirs") return entry.theirs;
     return choice.manual;
   }
 
@@ -241,9 +205,6 @@ export class MergeEngine {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * CommitのTreeオブジェクトを取得する
-   */
   private getCommitTree(commitId: ObjectId): Tree {
     const commit = this.objectStore.get(commitId);
     if (!commit || commit.type !== "commit") {
@@ -256,16 +217,7 @@ export class MergeEngine {
     return tree as Tree;
   }
 
-  /**
-   * Treeのエントリをフラットなファイルマップに変換する
-   *
-   * name → content のMapを返す。
-   * Blobエントリのみを対象とし、サブTreeは再帰的に展開する。
-   */
-  private flattenTree(
-    tree: Tree,
-    prefix: string = ""
-  ): Map<string, string> {
+  private flattenTree(tree: Tree, prefix: string = ""): Map<string, string> {
     const files = new Map<string, string>();
     for (const entry of tree.entries) {
       const fullPath = prefix ? `${prefix}/${entry.name}` : entry.name;

@@ -34,9 +34,9 @@ function EdgeLine({
   toNode: DAGNode;
 }) {
   const x1 = fromNode.x + PADDING;
-  const y1 = fromNode.y + PADDING;
+  const y1 = fromNode.y + PADDING + NODE_RADIUS;
   const x2 = toNode.x + PADDING;
-  const y2 = toNode.y + PADDING;
+  const y2 = toNode.y + PADDING - NODE_RADIUS;
 
   return (
     <line

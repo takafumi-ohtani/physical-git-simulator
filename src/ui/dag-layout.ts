@@ -202,51 +202,41 @@ function topologicalSort(
  * Branch列の水平位置を割り当てる。
  *
  * 戦略（トポロジカル順 = 子が先に処理される）:
- * - 最初に処理されるCommit（leaf）は列0
- * - 子が親に自分の列を伝播する
- * - 親が複数の子から列を受け取る場合、最初の子の列を継承
- * - 分岐元の親から派生した2番目以降の子は新しい列を割り当て
+ * - 最初の子から継承した親は同じ列
+ * - Merge Commitの2番目以降の親は新しい列を割り当て（分岐を表現）
  */
 function assignColumns(
   sorted: Commit[],
   commitMap: Map<ObjectId, Commit>
 ): Map<ObjectId, number> {
   const columnOf = new Map<ObjectId, number>();
+  // 各親に対して「最初に列を継承させた子」を記録
+  const parentClaimedBy = new Map<ObjectId, ObjectId>();
   let nextColumn = 0;
 
-  // Track how many children have already claimed each parent
-  const parentClaimedBy = new Map<ObjectId, ObjectId>();
-
   for (const commit of sorted) {
-    if (columnOf.has(commit.id)) continue;
-
-    // This commit hasn't been assigned a column yet → assign a new one
-    columnOf.set(commit.id, nextColumn++);
-  }
-
-  // Now do a second pass: propagate columns from children to parents.
-  // In a linear chain, the child should share its column with its parent.
-  // We process in topological order (children first).
-  // Reset and redo with propagation.
-  columnOf.clear();
-  nextColumn = 0;
-
-  for (const commit of sorted) {
+    // まだ列が割り当てられていなければ新しい列を確保
     if (!columnOf.has(commit.id)) {
-      // Leaf commit or first encounter → assign new column
       columnOf.set(commit.id, nextColumn++);
     }
 
-    // Propagate this commit's column to its first unclaimed parent
-    for (const pid of commit.parentIds) {
-      if (!commitMap.has(pid)) continue;
+    const myCol = columnOf.get(commit.id)!;
 
-      if (!columnOf.has(pid) && !parentClaimedBy.has(pid)) {
-        // Parent hasn't been assigned yet → inherit child's column
-        columnOf.set(pid, columnOf.get(commit.id)!);
-        parentClaimedBy.set(pid, commit.id);
+    commit.parentIds.forEach((pid, idx) => {
+      if (!commitMap.has(pid)) return;
+
+      if (!columnOf.has(pid)) {
+        if (idx === 0 && !parentClaimedBy.has(pid)) {
+          // 最初の親 → 自分の列を継承させる（直線チェーン）
+          columnOf.set(pid, myCol);
+          parentClaimedBy.set(pid, commit.id);
+        } else {
+          // 2番目以降の親（Merge Commitの場合）→ 新しい列
+          columnOf.set(pid, nextColumn++);
+          parentClaimedBy.set(pid, commit.id);
+        }
       }
-    }
+    });
   }
 
   return columnOf;

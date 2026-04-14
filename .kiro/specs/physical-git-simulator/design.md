@@ -53,7 +53,7 @@
 │  │  └─────────────┘  └─────────────────────┘  │  │
 │  │  ┌─────────────┐  ┌─────────────────────┐  │  │
 │  │  │  ID Gen     │  │  Merge Engine       │  │  │
-│  │  │ (3 modes)   │  │ (FF/Normal/Conflict)│  │  │
+│  │  │ (2 modes)   │  │ (FF/Normal/Conflict)│  │  │
 │  │  └─────────────┘  └─────────────────────┘  │  │
 │  └────────────────────────────────────────────┘  │
 │                       │                          │
@@ -68,7 +68,7 @@
 1. **Core Engine層**（純粋ロジック、UIに依存しない）
    - ObjectStore: Blob・Tree・Commitの不変オブジェクト管理
    - RefStore: Branch・HEADの可変参照管理
-   - IDGenerator: 3モードのID生成
+   - IDGenerator: 2モードのID生成
    - MergeEngine: Fast-Forward判定・Conflict検出・Ancestor探索
    - Validator: オブジェクト参照の整合性検証
 
@@ -159,14 +159,13 @@ type HeadRef =
 #### IDGenerator
 
 ```typescript
-type IdMode = "sequential" | "pseudo-hash" | "content-hash";
+type IdMode = "sequential" | "pseudo-hash";
 
 interface IDGenerator {
   generate(objectType: "blob" | "tree" | "commit", content: string): ObjectId;
   setMode(mode: IdMode): void;
   getMode(): IdMode;
   getCounter(objectType?: "blob" | "tree" | "commit"): number;
-  // 既存IDを新モードで再マッピング
   remapId(oldId: ObjectId, content: string, objectType?: "blob" | "tree" | "commit"): ObjectId;
 }
 ```
@@ -264,6 +263,10 @@ App
 ├── MainLayout
 │   ├── CommandPanel（左サイドバー）
 │   │   ├── BlobCreator
+│   │   │   ├── Word1Selector（ドロップダウン: 丸・三角・四角・バツ）
+│   │   │   ├── Word2Selector（ドロップダウン: 1・2・3・4）
+│   │   │   ├── DuplicateMessage（既存Blob IDの通知メッセージ）
+│   │   │   └── ContentMatrix（4×4グリッド、登録済みセルにBlob ID表示）
 │   │   ├── TreeCreator
 │   │   ├── CommitCreator（低レベル）
 │   │   ├── HighLevelCommit（高レベル）
@@ -289,6 +292,69 @@ App
 
 
 ## Data Models
+
+### Conflict解決UIの視覚設計
+
+Conflictが発生したファイルに対して、以下のレイアウトで表示する。
+
+```
+┌─────────────────────────────────────────────────┐
+│  Conflict: filename.txt                          │
+├──────────────┬──────────────┬───────────────────┤
+│  Ancestor    │    Ours      │     Theirs         │
+│  (HEAD側の   │  (HEAD側の   │  (相手Branch側の   │
+│   共通祖先)  │   変更)      │    変更)           │
+├──────────────┼──────────────┼───────────────────┤
+│ [丸] - [1]  │[三角]- [1]  │  [丸] -[2]        │
+│              │  ↑変更       │          ↑変更     │
+└──────────────┴──────────────┴───────────────────┘
+
+  [ Ours を採用 ]  [ Theirs を採用 ]  [ 別のBlobを選ぶ ]
+```
+
+**ワード単位の色分けルール:**
+- Ancestorから変更されたワード → 赤背景でハイライト
+- 変更されていないワード → 通常表示
+- 変更箇所に「↑変更」ラベルを付与
+
+これにより学習者は「どちらのブランチが何を変えたか」を一目で把握できる。
+
+Blobの内容は2ワードの固定語彙から構成される。
+
+```typescript
+// Blob内容の語彙定義
+const BLOB_WORD1 = ["丸", "三角", "四角", "バツ"] as const;
+const BLOB_WORD2 = ["1", "2", "3", "4"] as const;
+
+type BlobWord1 = typeof BLOB_WORD1[number]; // "丸" | "三角" | "四角" | "バツ"
+type BlobWord2 = typeof BLOB_WORD2[number]; // "1" | "2" | "3" | "4"
+type BlobContent = `${BlobWord1}-${BlobWord2}`; // 例: "丸-1", "三角-3"
+
+// Content_Matrixのセル状態
+interface ContentMatrixCell {
+  word1: BlobWord1;
+  word2: BlobWord2;
+  blobId: ObjectId | null; // null = 未登録
+}
+
+// 4×4マトリクス（行: word1, 列: word2）
+type ContentMatrix = ContentMatrixCell[][];
+```
+
+Content_Matrixのレイアウト（行=形状、列=数字）:
+
+```
+        1       2       3       4
+丸    [blob-1]  [ ]     [ ]     [ ]
+三角   [ ]     [ ]     [ ]     [ ]
+四角   [ ]     [ ]    [blob-2]  [ ]
+バツ   [ ]     [ ]     [ ]     [ ]
+```
+
+**重複チェックのロジック:**
+1. ドロップダウン変更時に `objectStore.findBlobByContent(content)` を呼ぶ
+2. 既存Blobが見つかった場合: ボタン無効化 + セルハイライト + UI内メッセージ表示
+3. 見つからない場合: ボタン有効化 + ハイライトなし + メッセージなし
 
 ### オブジェクトストア内部構造
 
@@ -342,13 +408,14 @@ interface DAGLayout {
 
 DAGレイアウトはトポロジカルソートに基づく簡易アルゴリズムで計算する。教育用途でノード数が少ないため、複雑なレイアウトアルゴリズムは不要。
 
-### ID生成の3モード
+### ID生成の2モード
 
 | モード | 生成方法 | 表示例 | 用途 |
 |--------|----------|--------|------|
 | sequential | 種別プレフィックス + 種別内連番 | `blob-1`, `blob-2`, `tree-1`, `commit-1` | 初学者向け、直感的 |
 | pseudo-hash | ランダム8文字hex | `a3f2b1c9` | ハッシュの概念導入 |
-| content-hash | SHA-1の先頭8文字 | `2cf24dba` | 内容依存IDの理解 |
+
+> **注:** BlobのコンテンツアドレッシングはContent_Matrixで体験させる設計のため、`content-hash`モードは不要。Tree・CommitのIDはハッシュ一致を保証しない（教育スコープ外）。
 
 ### Merge判定フロー
 
@@ -364,6 +431,72 @@ flowchart TD
     H -->|No| I[Normal Merge: 新Commit作成]
     H -->|Yes| J[Conflict: 解決フローへ]
 ```
+
+### Blob_Content を使ったConflict判定ルール
+
+2ワード構造（word1: 形状、word2: 数字）を活かし、ファイル単位のConflict判定をワードレベルで行う。
+
+| Ancestor | Ours | Theirs | 判定 | 理由 |
+|----------|------|--------|------|------|
+| 丸-1 | 丸-1 | 丸-1 | 変更なし | 両者とも未変更 |
+| 丸-1 | 三角-1 | 丸-1 | 自動（Ours採用） | Oursのみ変更 |
+| 丸-1 | 丸-1 | 丸-2 | 自動（Theirs採用） | Theirsのみ変更 |
+| 丸-1 | 三角-1 | 丸-2 | **Conflict** | 両ワードが変更（どちらも非Ancestor） |
+| 丸-1 | 三角-2 | 丸-2 | **Conflict** | 両ワードが変更 |
+
+**判定ロジック:**
+
+```typescript
+function classifyBlobMerge(
+  ancestor: BlobContent,
+  ours: BlobContent,
+  theirs: BlobContent
+): "no-change" | "auto-ours" | "auto-theirs" | "conflict" {
+  const oursChanged = ours !== ancestor;
+  const theirsChanged = theirs !== ancestor;
+
+  if (!oursChanged && !theirsChanged) return "no-change";
+  if (oursChanged && !theirsChanged) return "auto-ours";
+  if (!oursChanged && theirsChanged) return "auto-theirs";
+  // 両方変更 → 常にConflict（ワード単位の自動合成は行わない）
+  return "conflict";
+}
+```
+
+Conflict時はユーザーが手動解決（Ours採用・Theirs採用・新規Blob選択）を行う。
+
+### Conflict解決UIの視覚設計
+
+Conflictが発生したファイルに対して、以下のレイアウトで表示する。
+
+```
+┌─────────────────────────────────────────────────┐
+│  Conflict: filename.txt                          │
+├──────────────┬──────────────┬───────────────────┤
+│  Ancestor    │    Ours      │     Theirs         │
+│  (共通祖先)  │  (HEAD側)    │  (相手Branch側)    │
+├──────────────┼──────────────┼───────────────────┤
+│ [丸] - [1]  │[三角]- [1]  │  [丸] -[2]        │
+│              │  ↑変更       │          ↑変更     │
+└──────────────┴──────────────┴───────────────────┘
+
+  [ Ours を採用 ]  [ Theirs を採用 ]  [ 別のBlobを選ぶ ]
+```
+
+**ワード単位の色分けルール:**
+
+| 状態 | 表示 |
+|------|------|
+| Ancestorから変更されたワード | 赤背景 + 「↑変更」ラベル |
+| 変更されていないワード | 通常表示（グレー） |
+| 解決後に選ばれたワード | 緑背景 |
+
+これにより学習者は「どちらのブランチが何を変えたか」を一目で把握できる。
+
+**解決ボタンの動作:**
+- `Ours を採用` → OursのBlob IDをそのまま使用
+- `Theirs を採用` → TheirsのBlob IDをそのまま使用
+- `別のBlobを選ぶ` → Content_Matrixを表示し、任意のセルを選択（未登録の場合は新規Blob作成してから選択）
 
 ### オブジェクト種別の視覚表現
 

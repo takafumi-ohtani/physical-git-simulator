@@ -21,15 +21,13 @@ Gitの内部構造を視覚的に再現するWebアプリケーションを、Re
   - [x] 2.1 `src/core/id-generator.ts` に IDGenerator を実装する
     - `sequential` モード: `blob-1`, `blob-2`, `tree-1`, `commit-1` 形式の種別内連番生成
     - `pseudo-hash` モード: ランダム8文字hex生成
-    - `content-hash` モード: `crypto.subtle` を使ったSHA-1先頭8文字生成
     - `setMode`, `getMode`, `remapId` メソッドを実装
-    - _要件: 13.1, 13.2, 13.3_
+    - _要件: 13.1, 13.2_
 
   - [x] 2.2 IDGenerator のユニットテストを作成する
-    - 3モードそれぞれでIDが生成されることを検証
-    - 同一内容で content-hash モードが同一IDを返すことを検証
+    - 2モードそれぞれでIDが生成されることを検証
     - モード切替と remapId の動作を検証
-    - _要件: 13.1, 13.2, 13.3_
+    - _要件: 13.1, 13.2_
 
 - [x] 3. ObjectStore の実装
   - [x] 3.1 `src/core/object-store.ts` に ObjectStore を実装する
@@ -80,7 +78,7 @@ Gitの内部構造を視覚的に再現するWebアプリケーションを、Re
   - [x] 7.1 `src/core/diff.ts` に行単位diffユーティリティを実装する
     - 2つの文字列の行単位差分を計算
     - 追加・削除・変更行の識別
-    - _要件: 15.1, 15.2_
+    - _要件: 8.2_
 
 - [x] 8. 永続化レイヤーの実装
   - [x] 8.1 `src/core/persistence.ts` に localStorage ベースの永続化を実装する
@@ -149,7 +147,7 @@ Gitの内部構造を視覚的に再現するWebアプリケーションを、Re
     - ResolveActions: Ours採用・Theirs採用・手動解決の3ボタン
     - 手動解決時のテキストエディタ
     - 解決完了で RESOLVE_CONFLICT → COMPLETE_MERGE ディスパッチ
-    - _要件: 8.1, 8.2, 8.3, 8.4, 8.5, 15.1, 15.2_
+    - _要件: 8.1, 8.2, 8.3, 8.4, 8.5_
 
 - [x] 16. App全体レイアウトと統合
   - [x] 16.1 `src/App.tsx` にメインレイアウトを実装する
@@ -184,6 +182,69 @@ Gitの内部構造を視覚的に再現するWebアプリケーションを、Re
 
 - [x] 19. 最終チェックポイント - 全テスト通過確認
   - すべてのテストが通ることを確認し、不明点があればユーザーに質問する。
+
+---
+
+## 追加タスク: Blob 2ワード方式・Content_Matrix・Conflict視覚化
+
+### 背景
+
+要件1・7・8・13の設計変更に伴い、以下の実装を追加・修正する。
+
+- Blobの内容を「形状×数字」の2ワード固定語彙に変更
+- Content_Matrixによるコンテンツアドレッシング体験
+- Conflictのワード単位色分け表示
+- IDモードを2択（sequential / pseudo-hash）に簡略化
+
+- [x] 20. 型定義とコアロジックの更新
+  - [x] 20.1 `src/core/types.ts` の `IdMode` から `"content-hash"` を削除し、`BlobWord1`・`BlobWord2`・`BlobContent` 型を追加する
+    - `IdMode = "sequential" | "pseudo-hash"`
+    - `BlobWord1 = "丸" | "三角" | "四角" | "バツ"`
+    - `BlobWord2 = "1" | "2" | "3" | "4"`
+    - `BlobContent = \`${BlobWord1}-${BlobWord2}\``
+    - _要件: 1.1, 13.1_
+
+  - [x] 20.2 `src/core/id-generator.ts` から `content-hash` モードを削除する
+    - `crypto.subtle` 依存コードを削除
+    - `sequential` / `pseudo-hash` の2モードのみ残す
+    - _要件: 13.1_
+
+  - [x] 20.3 `src/core/merge-engine.ts` に `classifyBlobMerge` 関数を追加する
+    - `(ancestor, ours, theirs) => "no-change" | "auto-ours" | "auto-theirs" | "conflict"` を実装
+    - 両方変更の場合は常に `"conflict"` を返す
+    - _要件: 7.6, 7.7, 7.8_
+
+  - [x] 20.4 上記変更のユニットテストを更新・追加する
+    - `classifyBlobMerge` の全パターン（変更なし・Oursのみ・Theirsのみ・両方）を検証
+    - IDGeneratorの2モード動作を検証
+    - _要件: 7.6, 7.7, 7.8, 13.1_
+
+- [x] 21. BlobCreator と Content_Matrix UIの実装
+  - [x] 21.1 `src/ui/components/CommandPanel.tsx` の `BlobCreator` を2ワード選択UIに置き換える
+    - Word1ドロップダウン（丸・三角・四角・バツ）
+    - Word2ドロップダウン（1・2・3・4）
+    - 選択変更時に `objectStore.findBlobByContent` で重複チェック
+    - 重複あり: ボタン無効化 + 「この内容のBlobはすでに登録済みです（ID: xxx）」メッセージ表示
+    - _要件: 1.1, 1.2, 1.6_
+
+  - [x] 21.2 `BlobCreator` 内に `ContentMatrix` コンポーネントを実装する
+    - 4×4グリッド（行: 形状、列: 数字）を常時表示
+    - 登録済みセル: Blob IDを表示
+    - 未登録セル: 空白
+    - 現在選択中のセル: ハイライト（重複時は強調ハイライト）
+    - _要件: 1.4, 1.5, 1.6_
+
+- [x] 22. ConflictResolver のワード単位色分け表示に更新
+  - [x] 22.1 `src/ui/components/ConflictResolver.tsx` を2ワード構造に対応した表示に更新する
+    - Ancestor・Ours・Theirsを3列並置
+    - 各行のword1・word2をそれぞれ独立したスパンで表示
+    - Ancestorから変更されたワードに赤背景 + 「↑変更」ラベルを付与
+    - 解決ボタンを「Oursを採用」「Theirsを採用」「別のBlobを選ぶ」の3択に変更
+    - 「別のBlobを選ぶ」選択時はContent_Matrixを表示して選択させる
+    - _要件: 8.1, 8.2, 8.3, 8.4, 8.5_
+
+- [x] 23. チェックポイント - 追加機能の確認
+  - すべてのテストが通ることを確認する。
 
 ## 備考
 
