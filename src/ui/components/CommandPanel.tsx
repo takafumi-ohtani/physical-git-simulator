@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSimulator } from "../../state/context";
-import type { ObjectId, TreeEntry, GitObject } from "../../core/types";
+import type { ObjectId, TreeEntry, GitObject, BlobWord1, BlobWord2, BlobContent } from "../../core/types";
+import { BLOB_WORD1, BLOB_WORD2 } from "../../core/types";
 
 // =============================================================================
 // CommandPanel - 操作パネル（左サイドバー）
@@ -103,33 +104,155 @@ function Section({
 
 
 // =============================================================================
-// BlobCreator - テキスト入力 → CREATE_BLOB
+// ContentMatrix - 4×4グリッドでBlobの登録状況を表示
+// =============================================================================
+
+function ContentMatrix({
+  selectedWord1,
+  selectedWord2,
+  existingBlobId,
+}: {
+  selectedWord1: BlobWord1;
+  selectedWord2: BlobWord2;
+  existingBlobId: string | null;
+}) {
+  const { state } = useSimulator();
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 4 }}>
+        Content Matrix（コンテンツアドレス空間）
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 10 }}>
+        <thead>
+          <tr>
+            <th style={{ padding: "2px 4px", color: COLORS.muted, fontWeight: 400 }}></th>
+            {BLOB_WORD2.map((w2) => (
+              <th key={w2} style={{ padding: "2px 4px", color: COLORS.muted, fontWeight: 600, textAlign: "center" }}>
+                {w2}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {BLOB_WORD1.map((w1) => (
+            <tr key={w1}>
+              <td style={{ padding: "2px 4px", color: COLORS.muted, fontWeight: 600, whiteSpace: "nowrap" }}>
+                {w1}
+              </td>
+              {BLOB_WORD2.map((w2) => {
+                const content = `${w1}-${w2}`;
+                const blob = state.objectStore.findBlobByContent(content);
+                const isSelected = w1 === selectedWord1 && w2 === selectedWord2;
+                const isExisting = isSelected && existingBlobId !== null;
+
+                let bg = "#F9FAFB";
+                let border = `1px solid ${COLORS.border}`;
+                if (blob) bg = "#DBEAFE"; // 登録済み: 薄青
+                if (isSelected && !isExisting) bg = "#FEF9C3"; // 選択中（未登録）: 薄黄
+                if (isExisting) {
+                  bg = "#FEE2E2"; // 重複選択: 薄赤
+                  border = `2px solid #EF4444`;
+                }
+
+                return (
+                  <td
+                    key={w2}
+                    style={{
+                      padding: "3px 2px",
+                      border,
+                      background: bg,
+                      textAlign: "center",
+                      minWidth: 36,
+                      fontFamily: "monospace",
+                      color: blob ? COLORS.blob : COLORS.muted,
+                      fontWeight: blob ? 600 : 400,
+                    }}
+                    title={blob ? `ID: ${blob.id}` : content}
+                  >
+                    {blob ? blob.id : ""}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// =============================================================================
+// BlobCreator - 2ワード選択 → CREATE_BLOB
 // =============================================================================
 
 function BlobCreator() {
-  const { dispatch } = useSimulator();
-  const [content, setContent] = useState("");
+  const { state, dispatch } = useSimulator();
+  const [word1, setWord1] = useState<BlobWord1>(BLOB_WORD1[0]);
+  const [word2, setWord2] = useState<BlobWord2>(BLOB_WORD2[0]);
+
+  const content: BlobContent = `${word1}-${word2}`;
+  const existingBlob = state.objectStore.findBlobByContent(content);
 
   const handleCreate = () => {
-    if (!content) return;
+    if (existingBlob) return;
     dispatch({ type: "CREATE_BLOB", content });
-    setContent("");
   };
 
   return (
     <Section title="Blob 作成" color={COLORS.blob}>
-      <label style={labelStyle}>内容</label>
-      <textarea
-        style={textareaStyle}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Blobの内容を入力..."
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>形状（1ワード目）</label>
+          <select
+            style={inputStyle}
+            value={word1}
+            onChange={(e) => setWord1(e.target.value as BlobWord1)}
+          >
+            {BLOB_WORD1.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>数字（2ワード目）</label>
+          <select
+            style={inputStyle}
+            value={word2}
+            onChange={(e) => setWord2(e.target.value as BlobWord2)}
+          >
+            {BLOB_WORD2.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {existingBlob && (
+        <div style={{
+          marginTop: 6,
+          padding: "4px 8px",
+          background: "#FEE2E2",
+          border: "1px solid #FCA5A5",
+          borderRadius: 4,
+          fontSize: 11,
+          color: "#DC2626",
+        }}>
+          この内容のBlobはすでに登録済みです（ID: {existingBlob.id}）
+        </div>
+      )}
+
+      <ContentMatrix
+        selectedWord1={word1}
+        selectedWord2={word2}
+        existingBlobId={existingBlob?.id ?? null}
       />
+
       <div style={{ ...fieldGap, textAlign: "right" }}>
         <button
-          style={{ ...btnStyle, background: COLORS.blob }}
+          style={{ ...btnStyle, background: existingBlob ? COLORS.muted : COLORS.blob }}
           onClick={handleCreate}
-          disabled={!content}
+          disabled={!!existingBlob}
         >
           Blob 作成
         </button>
@@ -256,7 +379,7 @@ function CommitCreator() {
   };
 
   return (
-    <Section title="Commit 作成 (低レベル)" color={COLORS.commit}>
+    <Section title="Commit 作成" color={COLORS.commit}>
       <label style={labelStyle}>Tree ID</label>
       <select style={inputStyle} value={treeId} onChange={(e) => setTreeId(e.target.value)}>
         <option value="">-- Tree を選択 --</option>
@@ -350,7 +473,7 @@ function HighLevelCommit() {
   const canCommit = files.some((f) => f.name && f.content) && message;
 
   return (
-    <Section title="Commit (高レベル)" color={COLORS.commit} defaultOpen>
+    <Section title="Commit" color={COLORS.commit} defaultOpen>
       {files.map((file, idx) => (
         <div key={idx} style={{ marginBottom: 6, padding: 4, background: "#F3F4F6", borderRadius: 4 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -596,8 +719,7 @@ function MergePanel() {
   );
 
   return (
-    <Section title="Merge" color={COLORS.commit}>
-      {head.type !== "branch" && (
+    <Section title="Merge" color={COLORS.commit}>      {head.type !== "branch" && (
         <div style={{ fontSize: 11, color: COLORS.head, marginBottom: 6 }}>
           ⚠️ Detached HEAD 状態ではMergeできません
         </div>
@@ -668,7 +790,7 @@ function FixPanel() {
   const canFix = files.some((f) => f.name && f.content) && message;
 
   return (
-    <Section title="Fix (修正Commit)" color={COLORS.head}>
+    <Section title="Fix" color={COLORS.head}>
       {files.map((file, idx) => (
         <div key={idx} style={{ marginBottom: 6, padding: 4, background: "#FEF2F2", borderRadius: 4 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -723,10 +845,30 @@ function FixPanel() {
 }
 
 // =============================================================================
-// CommandPanel - メインエクスポート
+// CommandPanel - メインエクスポート（低レベル / 高レベル タブ切替）
 // =============================================================================
 
 export function CommandPanel() {
+  const [tab, setTab] = useState<"low" | "high">("low");
+
+  const tabBase: React.CSSProperties = {
+    flex: 1,
+    padding: "6px 0",
+    fontSize: 12,
+    fontWeight: 600,
+    border: "none",
+    borderBottom: "2px solid transparent",
+    background: "transparent",
+    cursor: "pointer",
+    color: COLORS.muted,
+  };
+
+  const tabActive: React.CSSProperties = {
+    ...tabBase,
+    color: COLORS.text,
+    borderBottomColor: COLORS.blob,
+  };
+
   return (
     <div
       style={{
@@ -736,27 +878,38 @@ export function CommandPanel() {
         background: COLORS.bg,
         borderRight: `1px solid ${COLORS.border}`,
         fontSize: 13,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <div
-        style={{
-          padding: "10px 12px",
-          fontWeight: 700,
-          fontSize: 14,
-          borderBottom: `1px solid ${COLORS.border}`,
-          color: COLORS.text,
-        }}
-      >
-        操作パネル
+      {/* タブヘッダー */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${COLORS.border}`, background: "#fff", flexShrink: 0 }}>
+        <button style={tab === "low" ? tabActive : tabBase} onClick={() => setTab("low")}>
+          低レベル操作
+        </button>
+        <button style={tab === "high" ? tabActive : tabBase} onClick={() => setTab("high")}>
+          高レベル操作
+        </button>
       </div>
-      <HighLevelCommit />
-      <BlobCreator />
-      <TreeCreator />
-      <CommitCreator />
-      <BranchManager />
-      <CheckoutPanel />
-      <MergePanel />
-      <FixPanel />
+
+      {/* タブコンテンツ */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {tab === "high" ? (
+          <>
+            <HighLevelCommit />
+            <MergePanel />
+            <FixPanel />
+          </>
+        ) : (
+          <>
+            <BlobCreator />
+            <TreeCreator />
+            <CommitCreator />
+            <BranchManager />
+            <CheckoutPanel />
+          </>
+        )}
+      </div>
     </div>
   );
 }

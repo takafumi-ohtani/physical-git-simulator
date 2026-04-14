@@ -40,9 +40,18 @@ export type HeadRef =
   | { type: "branch"; name: string }
   | { type: "detached"; commitId: ObjectId };
 
+// --- Blob Content (2ワード固定語彙) ---
+
+export const BLOB_WORD1 = ["○", "△", "□", "✕"] as const;
+export const BLOB_WORD2 = ["1", "2", "3", "4"] as const;
+
+export type BlobWord1 = typeof BLOB_WORD1[number];
+export type BlobWord2 = typeof BLOB_WORD2[number];
+export type BlobContent = `${BlobWord1}-${BlobWord2}`;
+
 // --- ID Generation ---
 
-export type IdMode = "sequential" | "pseudo-hash" | "content-hash";
+export type IdMode = "sequential" | "pseudo-hash";
 
 // --- Merge ---
 

@@ -1,32 +1,29 @@
 import type { IdMode, ObjectId } from "./types";
 
 /**
- * IDGenerator - 3モードのID生成器
+ * IDGenerator - 2モードのID生成器
  *
  * - sequential: `blob-1`, `tree-2`, `commit-3` 形式の連番
  * - pseudo-hash: ランダム8文字hex
- * - content-hash: SHA-1先頭8文字（同期フォールバック付き）
+ *
+ * Note: content-hash モードは廃止。BlobのコンテンツアドレッシングはContent_Matrixで体験させる。
  */
 export class IDGenerator {
   private mode: IdMode = "sequential";
   private counters: Record<string, number> = { blob: 0, tree: 0, commit: 0 };
 
-  /** 現在のモードを取得 */
   getMode(): IdMode {
     return this.mode;
   }
 
-  /** 指定種別のカウンターの現在値を取得 */
   getCounter(objectType: "blob" | "tree" | "commit" = "blob"): number {
     return this.counters[objectType] ?? 0;
   }
 
-  /** モードを切り替える */
   setMode(mode: IdMode): void {
     this.mode = mode;
   }
 
-  /** 現在の状態をクローンする */
   clone(): IDGenerator {
     const copy = new IDGenerator();
     copy.mode = this.mode;
@@ -34,28 +31,15 @@ export class IDGenerator {
     return copy;
   }
 
-  /**
-   * IDを生成する
-   * @param objectType - オブジェクト種別 (blob/tree/commit) — sequential モードで使用
-   * @param content - オブジェクトの内容 — content-hash モードで使用
-   */
-  generate(objectType: "blob" | "tree" | "commit", content: string): ObjectId {
+  generate(objectType: "blob" | "tree" | "commit", _content: string): ObjectId {
     switch (this.mode) {
       case "sequential":
         return this.generateSequential(objectType);
       case "pseudo-hash":
         return this.generatePseudoHash();
-      case "content-hash":
-        return this.generateContentHash(content);
     }
   }
 
-  /**
-   * 既存IDを現在のモードで再マッピングする
-   * @param _oldId - 旧ID（参照用、実際には content から再生成）
-   * @param content - オブジェクトの内容
-   * @param objectType - オブジェクト種別
-   */
   remapId(
     _oldId: ObjectId,
     content: string,
@@ -64,13 +48,11 @@ export class IDGenerator {
     return this.generate(objectType, content);
   }
 
-  /** sequential: type-N 形式（種別ごとに独立した連番） */
   private generateSequential(objectType: string): ObjectId {
     this.counters[objectType] = (this.counters[objectType] ?? 0) + 1;
     return `${objectType}-${this.counters[objectType]}`;
   }
 
-  /** pseudo-hash: ランダム8文字hex */
   private generatePseudoHash(): ObjectId {
     const bytes = new Uint8Array(4);
     crypto.getRandomValues(bytes);
@@ -78,33 +60,4 @@ export class IDGenerator {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
   }
-
-  /** content-hash: 同期的な簡易ハッシュ（SHA-1ライク、先頭8文字） */
-  private generateContentHash(content: string): ObjectId {
-    return simpleHash(content).slice(0, 8);
-  }
-}
-
-/**
- * 同期的な簡易ハッシュ関数
- * FNV-1a ベースで十分な分散を持つ hex 文字列を生成する。
- * ブラウザ互換性のため crypto.subtle (async) ではなく同期実装を採用。
- */
-function simpleHash(input: string): string {
-  // FNV-1a 64-bit をエミュレート（32-bit × 2 で十分な長さを確保）
-  let h1 = 0x811c9dc5 >>> 0; // FNV offset basis (32-bit)
-  let h2 = 0x01000193 >>> 0; // second seed
-
-  for (let i = 0; i < input.length; i++) {
-    const c = input.charCodeAt(i);
-    h1 ^= c;
-    h1 = Math.imul(h1, 0x01000193) >>> 0;
-    h2 ^= c;
-    h2 = Math.imul(h2, 0x0100019d) >>> 0;
-  }
-
-  // 8 hex chars from h1 + 8 hex chars from h2 = 16 chars total
-  return (
-    h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0")
-  );
 }

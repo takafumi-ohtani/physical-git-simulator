@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { MergeEngine } from '../merge-engine'
+import { MergeEngine, classifyBlobMerge } from '../merge-engine'
 import { ObjectStore } from '../object-store'
 import { RefStore } from '../ref-store'
 import { IDGenerator } from '../id-generator'
@@ -416,5 +416,47 @@ describe('MergeEngine', () => {
       expect(mergeEngine.resolveConflict(entry, 'ours')).toBe('ours version')
       expect(mergeEngine.resolveConflict(entry, 'theirs')).toBe('theirs version')
     })
+  })
+})
+
+// =============================================================================
+// classifyBlobMerge - 2ワード構造のConflict判定 (要件 7.6, 7.7, 7.8)
+// =============================================================================
+describe('classifyBlobMerge', () => {
+  it('should return no-change when both sides are unchanged', () => {
+    expect(classifyBlobMerge('○-1', '○-1', '○-1')).toBe('no-change')
+  })
+
+  it('should return auto-ours when only Ours changed', () => {
+    expect(classifyBlobMerge('○-1', '△-1', '○-1')).toBe('auto-ours')
+    expect(classifyBlobMerge('○-1', '○-2', '○-1')).toBe('auto-ours')
+    expect(classifyBlobMerge('○-1', '□-3', '○-1')).toBe('auto-ours')
+  })
+
+  it('should return auto-theirs when only Theirs changed', () => {
+    expect(classifyBlobMerge('○-1', '○-1', '△-1')).toBe('auto-theirs')
+    expect(classifyBlobMerge('○-1', '○-1', '○-2')).toBe('auto-theirs')
+    expect(classifyBlobMerge('○-1', '○-1', '✕-4')).toBe('auto-theirs')
+  })
+
+  it('should return conflict when both sides changed (both words)', () => {
+    expect(classifyBlobMerge('○-1', '△-1', '○-2')).toBe('conflict')
+    expect(classifyBlobMerge('○-1', '△-2', '○-2')).toBe('conflict')
+  })
+
+  it('should return conflict when both sides changed to different values', () => {
+    expect(classifyBlobMerge('○-1', '△-1', '□-1')).toBe('conflict')
+    expect(classifyBlobMerge('○-1', '○-2', '○-3')).toBe('conflict')
+  })
+
+  it('should cover all 16 BlobContent combinations as ancestor', () => {
+    const words1 = ['○', '△', '□', '✕'] as const
+    const words2 = ['1', '2', '3', '4'] as const
+    for (const w1 of words1) {
+      for (const w2 of words2) {
+        const ancestor = `${w1}-${w2}` as const
+        expect(classifyBlobMerge(ancestor, ancestor, ancestor)).toBe('no-change')
+      }
+    }
   })
 })

@@ -9,7 +9,9 @@
 ## 用語集
 
 - **Simulator**: 物理Gitシミュレータ本体。Gitの内部構造を可視化・操作するWebアプリケーション
-- **Blob**: Gitの不変オブジェクト。ファイル内容を保持する最小単位
+- **Blob**: Gitの不変オブジェクト。ファイル内容を保持する最小単位。本Simulatorでは「形状ワード＋数字ワード」の2ワード組み合わせで内容を表現する
+- **Blob_Content**: Blobの内容を表す2ワードの組み合わせ。第1ワードは形状（○・△・□・✕）、第2ワードは数字（1・2・3・4）
+- **Content_Matrix**: Blob_Contentの全16通りの組み合わせを4×4グリッドで表示するUI。コンテンツアドレッシングを視覚的に体験させるための仕組み
 - **Tree**: Gitの不変オブジェクト。ファイル名とBlob/サブTreeへの参照を保持するディレクトリ構造
 - **Commit**: Gitの不変オブジェクト。Tree参照・親Commit参照・メッセージを保持する履歴単位
 - **Branch**: 特定のCommitを指す可変参照ラベル
@@ -27,16 +29,19 @@
 
 ## 要件
 
-### 要件 1: Blob作成
+### 要件 1: Blob作成とContent_Matrix
 
-**ユーザーストーリー:** 教育者として、Blobを作成して内容を確認したい。Gitの最小オブジェクト単位を理解させるためである。
+**ユーザーストーリー:** 教育者として、Blobを作成してコンテンツアドレッシングを体験させたい。「同じ内容なら同じIDになる」というGitの原則を視覚的に理解させるためである。
 
 #### 受け入れ基準
 
-1. WHEN ユーザーがBlob作成を実行する, THE Simulator SHALL ユーザーが入力した内容を持つ新しいBlobをObject_Storeに追加する
-2. WHEN Blobが作成される, THE Simulator SHALL そのBlobに一意のIDを割り当てる
-3. WHEN 既存のBlobと同一内容でBlob作成が実行される, THE Simulator SHALL 同一内容のBlobが既に存在することをユーザーに通知する
-4. WHEN Blobが作成された後に内容の変更が試みられる, THE Simulator SHALL その変更を拒否し、Blobが不変オブジェクトであることを表示する
+1. THE Simulator SHALL Blob_Contentの入力として、第1ワード（○・△・□・✕）と第2ワード（1・2・3・4）をそれぞれドロップダウンで選択させる
+2. WHEN ユーザーがBlob作成ボタンを押す, THE Simulator SHALL 選択されたBlob_Contentを持つ新しいBlobをObject_Storeに追加する
+3. WHEN Blobが作成される, THE Simulator SHALL そのBlobに一意のIDを割り当てる
+4. THE Simulator SHALL Blob_Contentの全16通りの組み合わせを4×4のContent_Matrixとして常時表示する（行：形状、列：数字）
+5. WHEN Blobが作成される, THE Simulator SHALL Content_Matrix上の対応するセルにそのBlob IDを表示する
+6. WHEN ユーザーが既に登録済みのBlob_Contentを選択する, THE Simulator SHALL Blob作成ボタンを無効化し、Content_Matrix上の対応セルをハイライト表示するとともに、Blob作成UI内に「この内容のBlobはすでに登録済みです（ID: {既存BlobID}）」というメッセージを表示する
+7. WHEN Blobが作成された後に内容の変更が試みられる, THE Simulator SHALL その変更を拒否し、Blobが不変オブジェクトであることを表示する
 
 ### 要件 2: Tree作成
 
@@ -109,18 +114,22 @@
 3. WHEN Merge対象がFast_Forward不可でConflictがない, THE Simulator SHALL 新しいMerge Commitを作成し、2つの親Commitへの参照を持たせる
 4. WHEN Merge対象にConflictがある, THE Simulator SHALL Conflict状態であることを表示し、Conflict解決フローに遷移する
 5. WHEN Merge操作が完了する, THE Simulator SHALL HEADが指すBranchの参照先をMerge結果のCommitに進める
+6. WHEN 同一ファイルについてOursのみがAncestorから変更されている, THE Simulator SHALL Oursの内容を自動採用してConflictなしとして扱う
+7. WHEN 同一ファイルについてTheirsのみがAncestorから変更されている, THE Simulator SHALL Theirsの内容を自動採用してConflictなしとして扱う
+8. WHEN 同一ファイルについてOursとTheirsの両方がAncestorから変更されている, THE Simulator SHALL そのファイルをConflictとして扱い、ユーザーに手動解決を求める
 
 ### 要件 8: Conflict可視化と解決
 
-**ユーザーストーリー:** 学習者として、Conflict発生時にAncestor・Ours・Theirsの3つを比較したい。Conflictの構造を理解し、解決方法を学ぶためである。
+**ユーザーストーリー:** 学習者として、Conflict発生時にAncestor・Ours・Theirsの3つを比較したい。Conflictの構造を理解し、OursとTheirsの意味を体験的に学ぶためである。
 
 #### 受け入れ基準
 
-1. WHEN Conflictが発生する, THE Simulator SHALL Ancestor、Ours、Theirsの3つの内容を並べて表示する
-2. THE Simulator SHALL OursをHEAD側の変更、Theirsを相手Branch側の変更として明示的にラベル表示する
-3. WHEN ユーザーがConflict解決方法を選択する, THE Simulator SHALL Ours採用・Theirs採用・手動解決の3つの選択肢を提供する
-4. WHEN ユーザーが手動解決を選択する, THE Simulator SHALL 新しいResolved_Blobの作成を許可する
-5. WHEN Conflict解決が完了する, THE Simulator SHALL 解決結果を含むMerge Commitの作成を許可する
+1. WHEN Conflictが発生する, THE Simulator SHALL Ancestor・Ours・Theirsの3行をワード単位で色分けして並べて表示する
+2. THE Simulator SHALL Ancestorから変更されたワード（word1またはword2）を視覚的に強調し、どのワードが変わったかを明示する
+3. THE Simulator SHALL OursをHEAD側の変更、Theirsを相手Branch側の変更として明示的にラベル表示する
+4. WHEN ユーザーがConflict解決方法を選択する, THE Simulator SHALL 以下の3択をボタンとして提供する：Ours採用・Theirs採用・Content_Matrixから新規Blob選択
+5. WHEN ユーザーが「Content_Matrixから新規Blob選択」を選ぶ, THE Simulator SHALL Content_Matrixを表示し、任意のBlob（登録済みまたは新規作成）を解決結果として選択させる
+6. WHEN Conflict解決が完了する, THE Simulator SHALL 解決結果を含むMerge Commitの作成を許可する
 
 
 ### 要件 9: DAGグラフ表示
@@ -169,13 +178,13 @@
 
 ### 要件 13: ID方式切替
 
-**ユーザーストーリー:** 教育者として、オブジェクトIDの表示方式を切り替えたい。学習段階に応じて連番・疑似ハッシュ・内容依存ハッシュを使い分けるためである。
+**ユーザーストーリー:** 教育者として、オブジェクトIDの表示方式を切り替えたい。学習段階に応じて連番・疑似ハッシュを使い分けるためである。
 
 #### 受け入れ基準
 
-1. THE Simulator SHALL オブジェクトIDの表示方式として連番モード・疑似ハッシュモード・内容依存ハッシュモードの3つを提供する
+1. THE Simulator SHALL オブジェクトIDの表示方式として連番モード・疑似ハッシュモードの2つを提供する
 2. WHEN ユーザーがID表示方式を切り替える, THE Simulator SHALL すべてのオブジェクトのID表示を選択された方式に即座に更新する
-3. WHEN 内容依存ハッシュモードが選択されている, THE Simulator SHALL 内容または親が変わるとIDが変わることを視覚的に確認可能にする
+3. THE Simulator SHALL BlobのコンテンツアドレッシングはContent_Matrixによって視覚的に体験させる（IDモードに関わらず同一内容のBlobは同一セルに対応する）
 
 ### 要件 14: Fix操作（履歴を書き換えない修正）
 
@@ -186,13 +195,4 @@
 1. WHEN ユーザーがFix操作を実行する, THE Simulator SHALL 過去の変更に対する修正を新しいCommitとしてObject_Storeに追加する
 2. WHEN Fix操作が完了する, THE Simulator SHALL 既存のCommit履歴が変更されていないことを確認可能に表示する
 3. THE Simulator SHALL Fix用Branchの作成と運用をサポートする
-
-### 要件 15: Ancestor・Ours・Theirs・Resolvedの差異表示
-
-**ユーザーストーリー:** 学習者として、Merge時の各バージョン間の差異を確認したい。Conflictの原因と解決結果を構造的に理解するためである。
-
-#### 受け入れ基準
-
-1. WHEN Merge操作中にConflictが発生する, THE Simulator SHALL Ancestor・Ours・Theirs・Resolvedの4つの内容の差異を表示する
-2. THE Simulator SHALL 各バージョン間の差異を視覚的に強調表示する
 
