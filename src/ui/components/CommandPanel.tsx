@@ -379,7 +379,7 @@ function CommitCreator() {
   };
 
   return (
-    <Section title="Commit 作成 (低レベル)" color={COLORS.commit}>
+    <Section title="Commit 作成" color={COLORS.commit}>
       <label style={labelStyle}>Tree ID</label>
       <select style={inputStyle} value={treeId} onChange={(e) => setTreeId(e.target.value)}>
         <option value="">-- Tree を選択 --</option>
@@ -473,7 +473,7 @@ function HighLevelCommit() {
   const canCommit = files.some((f) => f.name && f.content) && message;
 
   return (
-    <Section title="Commit (高レベル)" color={COLORS.commit} defaultOpen>
+    <Section title="Commit" color={COLORS.commit} defaultOpen>
       {files.map((file, idx) => (
         <div key={idx} style={{ marginBottom: 6, padding: 4, background: "#F3F4F6", borderRadius: 4 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -719,8 +719,7 @@ function MergePanel() {
   );
 
   return (
-    <Section title="Merge" color={COLORS.commit}>
-      {head.type !== "branch" && (
+    <Section title="Merge" color={COLORS.commit}>      {head.type !== "branch" && (
         <div style={{ fontSize: 11, color: COLORS.head, marginBottom: 6 }}>
           ⚠️ Detached HEAD 状態ではMergeできません
         </div>
@@ -791,7 +790,7 @@ function FixPanel() {
   const canFix = files.some((f) => f.name && f.content) && message;
 
   return (
-    <Section title="Fix (修正Commit)" color={COLORS.head}>
+    <Section title="Fix" color={COLORS.head}>
       {files.map((file, idx) => (
         <div key={idx} style={{ marginBottom: 6, padding: 4, background: "#FEF2F2", borderRadius: 4 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -846,10 +845,30 @@ function FixPanel() {
 }
 
 // =============================================================================
-// CommandPanel - メインエクスポート
+// CommandPanel - メインエクスポート（低レベル / 高レベル タブ切替）
 // =============================================================================
 
 export function CommandPanel() {
+  const [tab, setTab] = useState<"low" | "high">("low");
+
+  const tabBase: React.CSSProperties = {
+    flex: 1,
+    padding: "6px 0",
+    fontSize: 12,
+    fontWeight: 600,
+    border: "none",
+    borderBottom: "2px solid transparent",
+    background: "transparent",
+    cursor: "pointer",
+    color: COLORS.muted,
+  };
+
+  const tabActive: React.CSSProperties = {
+    ...tabBase,
+    color: COLORS.text,
+    borderBottomColor: COLORS.blob,
+  };
+
   return (
     <div
       style={{
@@ -859,27 +878,38 @@ export function CommandPanel() {
         background: COLORS.bg,
         borderRight: `1px solid ${COLORS.border}`,
         fontSize: 13,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <div
-        style={{
-          padding: "10px 12px",
-          fontWeight: 700,
-          fontSize: 14,
-          borderBottom: `1px solid ${COLORS.border}`,
-          color: COLORS.text,
-        }}
-      >
-        操作パネル
+      {/* タブヘッダー */}
+      <div style={{ display: "flex", borderBottom: `1px solid ${COLORS.border}`, background: "#fff", flexShrink: 0 }}>
+        <button style={tab === "low" ? tabActive : tabBase} onClick={() => setTab("low")}>
+          低レベル操作
+        </button>
+        <button style={tab === "high" ? tabActive : tabBase} onClick={() => setTab("high")}>
+          高レベル操作
+        </button>
       </div>
-      <HighLevelCommit />
-      <BlobCreator />
-      <TreeCreator />
-      <CommitCreator />
-      <BranchManager />
-      <CheckoutPanel />
-      <MergePanel />
-      <FixPanel />
+
+      {/* タブコンテンツ */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {tab === "high" ? (
+          <>
+            <HighLevelCommit />
+            <MergePanel />
+            <FixPanel />
+          </>
+        ) : (
+          <>
+            <BlobCreator />
+            <TreeCreator />
+            <CommitCreator />
+            <BranchManager />
+            <CheckoutPanel />
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -10,7 +10,7 @@
 
 - **Simulator**: 物理Gitシミュレータ本体。Gitの内部構造を可視化・操作するWebアプリケーション
 - **Blob**: Gitの不変オブジェクト。ファイル内容を保持する最小単位。本Simulatorでは「形状ワード＋数字ワード」の2ワード組み合わせで内容を表現する
-- **Blob_Content**: Blobの内容を表す2ワードの組み合わせ。第1ワードは形状（丸・三角・四角・バツ）、第2ワードは数字（1・2・3・4）
+- **Blob_Content**: Blobの内容を表す2ワードの組み合わせ。第1ワードは形状（○・△・□・✕）、第2ワードは数字（1・2・3・4）
 - **Content_Matrix**: Blob_Contentの全16通りの組み合わせを4×4グリッドで表示するUI。コンテンツアドレッシングを視覚的に体験させるための仕組み
 - **Tree**: Gitの不変オブジェクト。ファイル名とBlob/サブTreeへの参照を保持するディレクトリ構造
 - **Commit**: Gitの不変オブジェクト。Tree参照・親Commit参照・メッセージを保持する履歴単位
@@ -35,7 +35,7 @@
 
 #### 受け入れ基準
 
-1. THE Simulator SHALL Blob_Contentの入力として、第1ワード（丸・三角・四角・バツ）と第2ワード（1・2・3・4）をそれぞれドロップダウンで選択させる
+1. THE Simulator SHALL Blob_Contentの入力として、第1ワード（○・△・□・✕）と第2ワード（1・2・3・4）をそれぞれドロップダウンで選択させる
 2. WHEN ユーザーがBlob作成ボタンを押す, THE Simulator SHALL 選択されたBlob_Contentを持つ新しいBlobをObject_Storeに追加する
 3. WHEN Blobが作成される, THE Simulator SHALL そのBlobに一意のIDを割り当てる
 4. THE Simulator SHALL Blob_Contentの全16通りの組み合わせを4×4のContent_Matrixとして常時表示する（行：形状、列：数字）

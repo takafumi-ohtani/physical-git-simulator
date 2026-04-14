@@ -42,7 +42,7 @@ export type HeadRef =
 
 // --- Blob Content (2ワード固定語彙) ---
 
-export const BLOB_WORD1 = ["丸", "三角", "四角", "バツ"] as const;
+export const BLOB_WORD1 = ["○", "△", "□", "✕"] as const;
 export const BLOB_WORD2 = ["1", "2", "3", "4"] as const;
 
 export type BlobWord1 = typeof BLOB_WORD1[number];

@@ -326,7 +326,7 @@ Blobの内容は2ワードの固定語彙から構成される。
 const BLOB_WORD1 = ["丸", "三角", "四角", "バツ"] as const;
 const BLOB_WORD2 = ["1", "2", "3", "4"] as const;
 
-type BlobWord1 = typeof BLOB_WORD1[number]; // "丸" | "三角" | "四角" | "バツ"
+type BlobWord1 = typeof BLOB_WORD1[number]; // "○" | "△" | "□" | "✕"
 type BlobWord2 = typeof BLOB_WORD2[number]; // "1" | "2" | "3" | "4"
 type BlobContent = `${BlobWord1}-${BlobWord2}`; // 例: "丸-1", "三角-3"
 

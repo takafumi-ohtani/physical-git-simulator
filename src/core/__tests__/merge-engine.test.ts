@@ -424,40 +424,37 @@ describe('MergeEngine', () => {
 // =============================================================================
 describe('classifyBlobMerge', () => {
   it('should return no-change when both sides are unchanged', () => {
-    expect(classifyBlobMerge('丸-1', '丸-1', '丸-1')).toBe('no-change')
+    expect(classifyBlobMerge('○-1', '○-1', '○-1')).toBe('no-change')
   })
 
   it('should return auto-ours when only Ours changed', () => {
-    expect(classifyBlobMerge('丸-1', '三角-1', '丸-1')).toBe('auto-ours')
-    expect(classifyBlobMerge('丸-1', '丸-2', '丸-1')).toBe('auto-ours')
-    expect(classifyBlobMerge('丸-1', '四角-3', '丸-1')).toBe('auto-ours')
+    expect(classifyBlobMerge('○-1', '△-1', '○-1')).toBe('auto-ours')
+    expect(classifyBlobMerge('○-1', '○-2', '○-1')).toBe('auto-ours')
+    expect(classifyBlobMerge('○-1', '□-3', '○-1')).toBe('auto-ours')
   })
 
   it('should return auto-theirs when only Theirs changed', () => {
-    expect(classifyBlobMerge('丸-1', '丸-1', '三角-1')).toBe('auto-theirs')
-    expect(classifyBlobMerge('丸-1', '丸-1', '丸-2')).toBe('auto-theirs')
-    expect(classifyBlobMerge('丸-1', '丸-1', 'バツ-4')).toBe('auto-theirs')
+    expect(classifyBlobMerge('○-1', '○-1', '△-1')).toBe('auto-theirs')
+    expect(classifyBlobMerge('○-1', '○-1', '○-2')).toBe('auto-theirs')
+    expect(classifyBlobMerge('○-1', '○-1', '✕-4')).toBe('auto-theirs')
   })
 
   it('should return conflict when both sides changed (both words)', () => {
-    // word1もword2も両方変更
-    expect(classifyBlobMerge('丸-1', '三角-1', '丸-2')).toBe('conflict')
-    expect(classifyBlobMerge('丸-1', '三角-2', '丸-2')).toBe('conflict')
+    expect(classifyBlobMerge('○-1', '△-1', '○-2')).toBe('conflict')
+    expect(classifyBlobMerge('○-1', '△-2', '○-2')).toBe('conflict')
   })
 
   it('should return conflict when both sides changed to different values', () => {
-    // 両方がAncestorと異なる（同じ値への変更でも両方変更ならconflict）
-    expect(classifyBlobMerge('丸-1', '三角-1', '四角-1')).toBe('conflict')
-    expect(classifyBlobMerge('丸-1', '丸-2', '丸-3')).toBe('conflict')
+    expect(classifyBlobMerge('○-1', '△-1', '□-1')).toBe('conflict')
+    expect(classifyBlobMerge('○-1', '○-2', '○-3')).toBe('conflict')
   })
 
   it('should cover all 16 BlobContent combinations as ancestor', () => {
-    const words1 = ['丸', '三角', '四角', 'バツ'] as const
+    const words1 = ['○', '△', '□', '✕'] as const
     const words2 = ['1', '2', '3', '4'] as const
     for (const w1 of words1) {
       for (const w2 of words2) {
         const ancestor = `${w1}-${w2}` as const
-        // no-change
         expect(classifyBlobMerge(ancestor, ancestor, ancestor)).toBe('no-change')
       }
     }
